@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace League\Flysystem\GoogleCloudStorage;
 
 use Google\Cloud\Storage\StorageClient;
+
 use function in_array;
 
 class StubStorageClient extends StorageClient

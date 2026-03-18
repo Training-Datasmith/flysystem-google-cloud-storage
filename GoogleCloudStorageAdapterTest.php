@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace League\Flysystem\GoogleCloudStorage;
 
+use function getenv;
+
 use League\Flysystem\AdapterTestUtilities\FilesystemAdapterTestCase;
 use League\Flysystem\Config;
 use League\Flysystem\FilesystemAdapter;
@@ -12,7 +14,6 @@ use League\Flysystem\UnableToDeleteDirectory;
 use League\Flysystem\UnableToDeleteFile;
 use League\Flysystem\UnableToRetrieveMetadata;
 use League\Flysystem\UnableToWriteFile;
-use function getenv;
 
 /**
  * @group gcs
@@ -51,8 +52,8 @@ class GoogleCloudStorageAdapterTest extends FilesystemAdapterTestCase
 
     protected static function createFilesystemAdapter(): FilesystemAdapter
     {
-        if ( ! file_exists(__DIR__ . '/../../google-cloud-service-account.json')) {
-            self::markTestSkipped("No google service account found in project root.");
+        if (! file_exists(__DIR__ . '/../../google-cloud-service-account.json')) {
+            self::markTestSkipped('No google service account found in project root.');
         }
 
         $clientOptions = [
@@ -110,7 +111,7 @@ class GoogleCloudStorageAdapterTest extends FilesystemAdapterTestCase
      */
     public function fetching_unknown_mime_type_of_a_file(): void
     {
-        $this->markTestSkipped("This adapter always returns a mime-type.");
+        $this->markTestSkipped('This adapter always returns a mime-type.');
     }
 
     /**

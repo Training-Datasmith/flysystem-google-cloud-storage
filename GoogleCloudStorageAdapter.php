@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace League\Flysystem\GoogleCloudStorage;
 
+use function array_key_exists;
+use function base64_decode;
+use function bin2hex;
+use function count;
+
 use DateTimeInterface;
 use Google\Cloud\Core\Exception\NotFoundException;
 use Google\Cloud\Storage\Bucket;
@@ -34,14 +39,12 @@ use League\Flysystem\Visibility;
 use League\MimeTypeDetection\FinfoMimeTypeDetector;
 use League\MimeTypeDetection\MimeTypeDetector;
 use LogicException;
-use Throwable;
-use function array_key_exists;
-use function base64_decode;
-use function bin2hex;
-use function count;
+
 use function rtrim;
 use function sprintf;
 use function strlen;
+
+use Throwable;
 
 class GoogleCloudStorageAdapter implements FilesystemAdapter, PublicUrlGenerator, ChecksumProvider, TemporaryUrlGenerator
 {
@@ -183,7 +186,7 @@ class GoogleCloudStorageAdapter implements FilesystemAdapter, PublicUrlGenerator
         }
 
         // @codeCoverageIgnoreStart
-        if ( ! is_resource($stream)) {
+        if (! is_resource($stream)) {
             throw UnableToReadFile::fromLocation($path, 'Downloaded object does not contain a file resource.');
         }
 
@@ -282,7 +285,7 @@ class GoogleCloudStorageAdapter implements FilesystemAdapter, PublicUrlGenerator
             // passthrough
         }
 
-        if ( ! isset($fileAttributes) || ! $fileAttributes instanceof FileAttributes || $fileAttributes[$type] === null) {
+        if (! isset($fileAttributes) || ! $fileAttributes instanceof FileAttributes || $fileAttributes[$type] === null) {
             throw UnableToRetrieveMetadata::{$type}($path, isset($exception) ? $exception->getMessage() : '', $exception);
         }
 
