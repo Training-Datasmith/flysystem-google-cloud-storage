@@ -37,7 +37,7 @@ class PortableVisibilityHandler implements VisibilityHandler
     {
         try {
             $acl = $object->acl()->get(['entity' => 'allUsers']);
-        } catch (NotFoundException $exception) {
+        } catch (NotFoundException) {
             return Visibility::PRIVATE;
         }
 

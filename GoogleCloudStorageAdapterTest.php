@@ -19,10 +19,7 @@ use function getenv;
  */
 class GoogleCloudStorageAdapterTest extends FilesystemAdapterTestCase
 {
-    /**
-     * @var string
-     */
-    private static $adapterPrefix = 'ci';
+    private static string $adapterPrefix = 'ci';
     private static StubRiggedBucket $bucket;
     private static PathPrefixer $prefixer;
 

@@ -197,7 +197,7 @@ class GoogleCloudStorageAdapter implements FilesystemAdapter, PublicUrlGenerator
         try {
             $prefixedPath = $this->prefixer->prefixPath($path);
             $this->bucket->object($prefixedPath)->delete();
-        } catch (NotFoundException $thisIsOk) {
+        } catch (NotFoundException) {
             // this is ok
         } catch (Throwable $exception) {
             throw UnableToDeleteFile::atLocation($path, $exception->getMessage(), $exception);
@@ -295,7 +295,7 @@ class GoogleCloudStorageAdapter implements FilesystemAdapter, PublicUrlGenerator
         $info = $object->info();
         $lastModified = strtotime($info['updated']);
 
-        if (substr($path, -1, 1) === '/') {
+        if (str_ends_with($path, '/')) {
             return new DirectoryAttributes(rtrim($path, '/'), null, $lastModified);
         }
 
