@@ -36,7 +36,7 @@ class PortableVisibilityHandler implements VisibilityHandler
     public function determineVisibility(StorageObject $object): string
     {
         try {
-            $acl = $object->acl()->get(['entity' => 'allUsers']);
+            $acl = $object->acl()->get(['entity' => $this->entity]);
         } catch (NotFoundException $exception) {
             return Visibility::PRIVATE;
         }

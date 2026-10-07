@@ -9,11 +9,23 @@
             "League\\Flysystem\\GoogleCloudStorage\\": ""
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "League\\Flysystem\\GoogleCloudStorage\\Tests\\": "tests/"
+        }
+    },
     "require": {
         "php": "^8.0.2",
         "google/cloud-storage": "^1.23",
         "league/flysystem": "^3.10.0",
         "league/mime-type-detection": "^1.0.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.6",
+        "ext-fileinfo": "*"
+    },
+    "scripts": {
+        "test": "phpunit"
     },
     "license": "MIT",
     "authors": [

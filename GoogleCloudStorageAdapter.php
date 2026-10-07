@@ -19,6 +19,7 @@ use League\Flysystem\StorageAttributes;
 use League\Flysystem\UnableToCheckDirectoryExistence;
 use League\Flysystem\UnableToCheckFileExistence;
 use League\Flysystem\UnableToCopyFile;
+use League\Flysystem\UnableToCreateDirectory;
 use League\Flysystem\UnableToDeleteDirectory;
 use League\Flysystem\UnableToDeleteFile;
 use League\Flysystem\UnableToGenerateTemporaryUrl;
@@ -95,7 +96,7 @@ class GoogleCloudStorageAdapter implements FilesystemAdapter, PublicUrlGenerator
         ];
 
         if (strlen($prefixedPath) > 0) {
-            $options = ['prefix' => rtrim($prefixedPath, '/') . '/'];
+            $options['prefix'] = rtrim($prefixedPath, '/') . '/';
         }
 
         try {
@@ -211,7 +212,13 @@ class GoogleCloudStorageAdapter implements FilesystemAdapter, PublicUrlGenerator
             $listing = $this->listContents($path, true);
 
             foreach ($listing as $attributes) {
-                $this->delete($attributes->path());
+                $deletePath = $attributes->path();
+
+                if ($attributes instanceof DirectoryAttributes) {
+                    $deletePath = rtrim($deletePath, '/') . '/';
+                }
+
+                $this->delete($deletePath);
             }
 
             if ($path !== '') {
@@ -226,8 +233,14 @@ class GoogleCloudStorageAdapter implements FilesystemAdapter, PublicUrlGenerator
     {
         $prefixedPath = $this->prefixer->prefixDirectoryPath($path);
 
-        if ($prefixedPath !== '') {
+        if ($prefixedPath === '') {
+            return;
+        }
+
+        try {
             $this->bucket->upload('', ['name' => $prefixedPath]);
+        } catch (Throwable $exception) {
+            throw UnableToCreateDirectory::atLocation($path, $exception->getMessage(), $exception);
         }
     }
 
