@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace League\Flysystem\GoogleCloudStorage\Tests;
 
 use DateTimeImmutable;
-use Google\Cloud\Core\Exception\NotFoundException;
 use Google\Cloud\Storage\Acl;
 use League\Flysystem\Config;
 use League\Flysystem\DirectoryAttributes;
@@ -406,6 +405,35 @@ final class GoogleCloudStorageAdapterTest extends TestCase
         $this->assertSame('dir/sub/b.txt', $items[0]->path());
     }
 
+    public function test_prefixed_shallow_list_contents(): void
+    {
+        $bucket = new MemoryBucket();
+        $file = new MemoryObject($bucket, 'ci/dir/file.txt', 'x', ['size' => '1', 'contentType' => 'text/plain', 'updated' => '2020-01-02T03:04:05Z']);
+        $bucket->setNextListing(new ObjectListing([$file]));
+        $adapter = $this->adapter($bucket, prefix: 'ci');
+
+        $items = iterator_to_array($adapter->listContents('dir', false), false);
+
+        $this->assertSame(
+            ['prefix' => 'ci/dir/', 'delimiter' => '/', 'includeTrailingDelimiter' => true],
+            $bucket->objectListCalls[0],
+        );
+        $this->assertSame('dir/file.txt', $items[0]->path());
+    }
+
+    public function test_prefixed_deep_list_contents(): void
+    {
+        $bucket = new MemoryBucket();
+        $nested = new MemoryObject($bucket, 'ci/dir/sub/b.txt', 'b', ['size' => '1', 'contentType' => 'text/plain', 'updated' => '2020-01-02T03:04:05Z']);
+        $bucket->setNextListing(new ObjectListing([$nested]));
+        $adapter = $this->adapter($bucket, prefix: 'ci');
+
+        $items = iterator_to_array($adapter->listContents('dir', true), false);
+
+        $this->assertSame(['prefix' => 'ci/dir/'], $bucket->objectListCalls[0]);
+        $this->assertSame('dir/sub/b.txt', $items[0]->path());
+    }
+
     public function test_copy_retains_public_acl(): void
     {
         $bucket = new MemoryBucket();
@@ -417,6 +445,19 @@ final class GoogleCloudStorageAdapterTest extends TestCase
 
         $this->assertTrue($bucket->hasObject('b.txt'));
         $this->assertTrue($bucket->hasObject('a.txt'));
+        $this->assertSame('publicRead', $source->copyCalls[0]['predefinedAcl']);
+        $this->assertSame('b.txt', $source->copyCalls[0]['name']);
+    }
+
+    public function test_copy_retains_private_acl(): void
+    {
+        $bucket = new MemoryBucket();
+        $source = $bucket->seedObject('a.txt', 'payload');
+        $adapter = $this->adapter($bucket);
+
+        $adapter->copy('a.txt', 'b.txt', new Config());
+
+        $this->assertSame('projectPrivate', $source->copyCalls[0]['predefinedAcl']);
     }
 
     public function test_copy_without_retain_visibility_omits_acl(): void
@@ -429,12 +470,14 @@ final class GoogleCloudStorageAdapterTest extends TestCase
         $adapter->copy('a.txt', 'b.txt', new Config([Config::OPTION_RETAIN_VISIBILITY => false]));
 
         $this->assertTrue($bucket->hasObject('b.txt'));
+        $this->assertArrayNotHasKey('predefinedAcl', $source->copyCalls[0]);
     }
 
-    public function test_move_removes_source_after_copy(): void
+    public function test_move_retains_public_acl_and_deletes_source(): void
     {
         $bucket = new MemoryBucket();
-        $bucket->seedObject('a.txt', 'payload');
+        $source = $bucket->seedObject('a.txt', 'payload');
+        $source->acl()->grantReader('allUsers');
         $adapter = $this->adapter($bucket);
 
         $adapter->move('a.txt', 'b.txt', new Config());
@@ -442,6 +485,133 @@ final class GoogleCloudStorageAdapterTest extends TestCase
         $this->assertFalse($bucket->hasObject('a.txt'));
         $this->assertTrue($bucket->hasObject('b.txt'));
         $this->assertSame('payload', $adapter->read('b.txt'));
+        $this->assertSame('publicRead', $source->copyCalls[0]['predefinedAcl']);
+        $this->assertContains('a.txt', $bucket->deletedObjectNames);
+    }
+
+    public function test_read_wraps_download_failure(): void
+    {
+        $bucket = new MemoryBucket();
+        $object = $bucket->seedObject('a.txt', 'data');
+        $object->downloadThrowable = new RuntimeException('read failed');
+        $adapter = $this->adapter($bucket);
+
+        try {
+            $adapter->read('a.txt');
+            $this->fail('Expected exception');
+        } catch (UnableToReadFile $exception) {
+            $this->assertInstanceOf(RuntimeException::class, $exception->getPrevious());
+        }
+    }
+
+    public function test_read_stream_wraps_download_failure(): void
+    {
+        $bucket = new MemoryBucket();
+        $object = $bucket->seedObject('a.txt', 'data');
+        $object->downloadThrowable = new RuntimeException('stream failed');
+        $adapter = $this->adapter($bucket);
+
+        try {
+            $adapter->readStream('a.txt');
+            $this->fail('Expected exception');
+        } catch (UnableToReadFile $exception) {
+            $this->assertInstanceOf(RuntimeException::class, $exception->getPrevious());
+        }
+    }
+
+    public function test_delete_directory_wraps_child_delete_failure(): void
+    {
+        $bucket = new MemoryBucket();
+        $source = $bucket->seedObject('dir/a.txt', 'x');
+        $file = new MemoryObject($bucket, 'dir/a.txt', 'x');
+        $bucket->setNextListing(new ObjectListing([$file]));
+        $source->failDeleteOnce = true;
+        $adapter = $this->adapter($bucket);
+
+        try {
+            $adapter->deleteDirectory('dir');
+            $this->fail('Expected exception');
+        } catch (UnableToDeleteDirectory $exception) {
+            $this->assertInstanceOf(UnableToDeleteFile::class, $exception->getPrevious());
+        }
+    }
+
+    public function test_set_visibility_wraps_acl_errors(): void
+    {
+        $bucket = new MemoryBucket();
+        $object = $bucket->seedObject('file.txt', 'x');
+        $object->acl()->updateThrowable = new RuntimeException('acl update failed');
+        $adapter = $this->adapter($bucket);
+
+        try {
+            $adapter->setVisibility('file.txt', Visibility::PUBLIC);
+            $this->fail('Expected exception');
+        } catch (UnableToSetVisibility $exception) {
+            $this->assertInstanceOf(RuntimeException::class, $exception->getPrevious());
+        }
+    }
+
+    public function test_copy_wraps_client_failure(): void
+    {
+        $bucket = new MemoryBucket();
+        $source = $bucket->seedObject('a.txt', 'payload');
+        $source->copyThrowable = new RuntimeException('copy failed');
+        $adapter = $this->adapter($bucket);
+
+        try {
+            $adapter->copy('a.txt', 'b.txt', new Config());
+            $this->fail('Expected exception');
+        } catch (UnableToCopyFile $exception) {
+            $this->assertInstanceOf(RuntimeException::class, $exception->getPrevious());
+        }
+    }
+
+    public function test_move_wraps_delete_failure_after_copy(): void
+    {
+        $bucket = new MemoryBucket();
+        $source = $bucket->seedObject('a.txt', 'payload');
+        $source->failDeleteOnce = true;
+        $adapter = $this->adapter($bucket);
+
+        try {
+            $adapter->move('a.txt', 'b.txt', new Config());
+            $this->fail('Expected exception');
+        } catch (UnableToMoveFile $exception) {
+            $this->assertInstanceOf(UnableToDeleteFile::class, $exception->getPrevious());
+        }
+    }
+
+    public function test_temporary_url_wraps_signer_errors(): void
+    {
+        $bucket = new MemoryBucket();
+        $object = $bucket->seedObject('a.txt', 'x');
+        $object->signedUrlThrowable = new RuntimeException('sign failed');
+        $adapter = $this->adapter($bucket);
+
+        try {
+            $adapter->temporaryUrl('a.txt', new DateTimeImmutable('2030-01-01'), new Config());
+            $this->fail('Expected exception');
+        } catch (UnableToGenerateTemporaryUrl $exception) {
+            $this->assertInstanceOf(RuntimeException::class, $exception->getPrevious());
+        }
+    }
+
+    public function test_mime_type_wraps_info_failure(): void
+    {
+        $bucket = new MemoryBucket();
+        $object = $bucket->seedObject('file.txt', 'hello', [
+            'size' => '5',
+            'updated' => '2020-01-02T03:04:05Z',
+        ]);
+        $object->infoThrowable = new RuntimeException('info failed');
+        $adapter = $this->adapter($bucket);
+
+        try {
+            $adapter->mimeType('file.txt');
+            $this->fail('Expected exception');
+        } catch (UnableToRetrieveMetadata $exception) {
+            $this->assertInstanceOf(RuntimeException::class, $exception->getPrevious());
+        }
     }
 
     public function test_checksum_returns_hard_coded_md5_hex(): void

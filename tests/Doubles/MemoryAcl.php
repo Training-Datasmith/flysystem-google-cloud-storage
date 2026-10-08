@@ -15,6 +15,8 @@ final class MemoryAcl
 
     public ?Throwable $getThrowable = null;
 
+    public ?Throwable $updateThrowable = null;
+
     public function get(array $options = []): array
     {
         if ($this->getThrowable instanceof Throwable) {
@@ -32,6 +34,10 @@ final class MemoryAcl
 
     public function update(string $entity, string $role): void
     {
+        if ($this->updateThrowable instanceof Throwable) {
+            throw $this->updateThrowable;
+        }
+
         $this->roles[$entity] = $role;
     }
 

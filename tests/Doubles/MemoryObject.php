@@ -36,6 +36,13 @@ class MemoryObject extends StorageObject
     /** @var array<string, mixed> */
     public array $lastSignedOptions = [];
 
+    /** @var array<int, array<string, mixed>> */
+    public array $copyCalls = [];
+
+    public ?Throwable $copyThrowable = null;
+
+    public bool $failDeleteOnce = false;
+
     public function __construct(
         private MemoryBucket $bucket,
         private string $objectName,
@@ -123,6 +130,11 @@ class MemoryObject extends StorageObject
 
     public function delete(array $options = []): void
     {
+        if ($this->failDeleteOnce) {
+            $this->failDeleteOnce = false;
+            throw new RuntimeException('delete failed');
+        }
+
         if (! $this->bucket->hasObject($this->objectName)) {
             throw new NotFoundException('Object not found');
         }
@@ -132,6 +144,12 @@ class MemoryObject extends StorageObject
 
     public function copy($destination, array $options = []): StorageObject
     {
+        if ($this->copyThrowable instanceof Throwable) {
+            throw $this->copyThrowable;
+        }
+
+        $this->copyCalls[] = $options;
+
         if (! $destination instanceof MemoryBucket) {
             throw new RuntimeException('Unexpected copy destination');
         }
