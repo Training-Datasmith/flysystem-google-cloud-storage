@@ -113,6 +113,8 @@ class MemoryObject extends StorageObject
             return new class ($stream) implements StreamInterface {
                 use \GuzzleHttp\Psr7\StreamDecoratorTrait;
 
+                private $stream;
+
                 public function __construct(StreamInterface $stream)
                 {
                     $this->stream = $stream;

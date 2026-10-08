@@ -13,6 +13,8 @@ use Traversable;
  */
 final class ObjectListing implements IteratorAggregate
 {
+    private bool $iterationStarted = false;
+
     /** @param array<int, StorageObject> $items */
     public function __construct(
         private array $items,
@@ -22,11 +24,17 @@ final class ObjectListing implements IteratorAggregate
 
     public function getIterator(): Traversable
     {
+        $this->iterationStarted = true;
+
         yield from $this->items;
     }
 
     public function prefixes(): array
     {
+        if (! $this->iterationStarted) {
+            return [];
+        }
+
         return $this->prefixes;
     }
 }

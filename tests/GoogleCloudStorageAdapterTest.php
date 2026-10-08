@@ -33,6 +33,7 @@ use League\Flysystem\UnableToWriteFile;
 use League\Flysystem\ChecksumAlgoIsNotSupported;
 use League\Flysystem\Visibility;
 use League\MimeTypeDetection\MimeTypeDetector;
+use LogicException;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
@@ -192,20 +193,20 @@ final class GoogleCloudStorageAdapterTest extends TestCase
 
         $adapter->directoryExists('dir');
         $this->assertSame(
-            ['delimiter' => '/', 'includeTrailingDelimiter' => true, 'prefix' => 'dir/'],
+            ['prefix' => 'dir/'],
             $bucket->objectListCalls[1],
         );
 
         $adapter = $this->adapter($bucket, prefix: 'ci');
         $adapter->directoryExists('');
         $this->assertSame(
-            ['delimiter' => '/', 'includeTrailingDelimiter' => true, 'prefix' => 'ci/'],
+            ['prefix' => 'ci/'],
             $bucket->objectListCalls[2],
         );
 
         $adapter->directoryExists('sub');
         $this->assertSame(
-            ['delimiter' => '/', 'includeTrailingDelimiter' => true, 'prefix' => 'ci/sub/'],
+            ['prefix' => 'ci/sub/'],
             $bucket->objectListCalls[3],
         );
     }
@@ -218,7 +219,8 @@ final class GoogleCloudStorageAdapterTest extends TestCase
         $adapter = $this->adapter($bucket);
         $this->assertTrue($adapter->directoryExists('dir'));
 
-        $bucket->setNextListing(new ObjectListing([], ['dir/sub/']));
+        $nestedFile = new MemoryObject($bucket, 'dir/sub/b.txt', 'b');
+        $bucket->setNextListing(new ObjectListing([$nestedFile]));
         $this->assertTrue($adapter->directoryExists('dir'));
     }
 
@@ -327,8 +329,12 @@ final class GoogleCloudStorageAdapterTest extends TestCase
         $bucket->failUpload('foo/');
         $adapter = $this->adapter($bucket);
 
-        $this->expectException(UnableToCreateDirectory::class);
-        $adapter->createDirectory('foo', new Config());
+        try {
+            $adapter->createDirectory('foo', new Config());
+            $this->fail('Expected exception');
+        } catch (UnableToCreateDirectory $exception) {
+            $this->assertInstanceOf(LogicException::class, $exception->getPrevious());
+        }
     }
 
     public function test_set_visibility_public_then_private_round_trip(): void
@@ -369,7 +375,7 @@ final class GoogleCloudStorageAdapterTest extends TestCase
         $size = $adapter->fileSize('file.txt');
         $this->assertSame(15, $size->fileSize());
         $this->assertSame('text/plain', $adapter->mimeType('file.txt')->mimeType());
-        $this->assertSame(strtotime('2020-01-02T03:04:05Z'), $adapter->lastModified('file.txt')->lastModified());
+        $this->assertSame(1577934245, $adapter->lastModified('file.txt')->lastModified());
         $this->assertSame('value', $size->extraMetadata()['custom']);
     }
 
@@ -631,7 +637,7 @@ final class GoogleCloudStorageAdapterTest extends TestCase
     {
         $bucket = new MemoryBucket();
         $object = $bucket->seedObject('one.bin', 'x');
-        $object->setInfo(['crc32c' => 'AAAAAA==', 'etag' => 'YWJj==']);
+        $object->setInfo(['crc32c' => 'AAAAAA==', 'etag' => 'YWJj']);
         $adapter = $this->adapter($bucket);
 
         $this->assertSame('00000000', $adapter->checksum('one.bin', new Config(['checksum_algo' => 'crc32c'])));

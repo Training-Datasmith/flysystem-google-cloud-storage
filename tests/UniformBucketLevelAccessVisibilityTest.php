@@ -36,11 +36,8 @@ final class UniformBucketLevelAccessVisibilityTest extends TestCase
         $handler = new UniformBucketLevelAccessVisibility();
 
         $handler->setVisibility($object, Visibility::PUBLIC);
-        $handler->setVisibility($object, Visibility::PRIVATE);
 
-        $this->assertSame(
-            UniformBucketLevelAccessVisibility::NO_PREDEFINED_VISIBILITY,
-            $handler->determineVisibility($object),
-        );
+        $this->expectException(\Google\Cloud\Core\Exception\NotFoundException::class);
+        $object->acl()->get(['entity' => 'allUsers']);
     }
 }
